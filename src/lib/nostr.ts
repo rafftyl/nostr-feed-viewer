@@ -48,7 +48,6 @@ export function connectToRelay(url: string): Promise<RelayConnection> {
       subs: new Map(),
     };
 
-    // Single message handler dispatches to all active subs
     ws.onmessage = (msg: MessageEvent) => {
       try {
         const data = JSON.parse(msg.data);
@@ -108,7 +107,6 @@ export async function subscribeToRelay(
   const cleanUrl = getRelayUrl(url);
 
   const conn = await connectToRelay(cleanUrl);
-
   conn.subs.set(subId, { onEvent, onEose });
 
   const req = JSON.stringify(["REQ", subId, filter]);
@@ -123,10 +121,18 @@ export async function subscribeToRelay(
 
 // ─── Multi-Relay Subscription ────────────────────────────────────────────────
 
+/**
+ * Fetch events from multiple relays.
+ *
+ * If `onEvent` is provided, events are streamed to the caller in real-time
+ * as each relay delivers them (progressive loading). The returned promise
+ * still resolves with the full deduplicated set once all relays finish.
+ */
 export async function fetchEvents(
   relays: string[],
   filters: CompiledFilter[],
-  timeout = 15000
+  timeout = 15000,
+  onEvent?: (event: NostrEvent) => void
 ): Promise<NostrEvent[]> {
   const events = new Map<string, NostrEvent>();
   const cleanRelays = relays.map(getRelayUrl).filter(Boolean);
@@ -142,7 +148,10 @@ export async function fetchEvents(
               relayUrl,
               filter,
               (event) => {
-                events.set(event.id, event);
+                if (!events.has(event.id)) {
+                  events.set(event.id, event);
+                  onEvent?.(event);
+                }
               },
               () => {
                 clearTimeout(timer);
@@ -215,6 +224,38 @@ export async function fetchProfiles(
         profiles.set(event.pubkey, event);
       }
     }
+  }
+
+  return profiles;
+}
+
+/**
+ * Stream profiles to the caller as they arrive from relays.
+ */
+export async function fetchProfilesStreaming(
+  pubkeys: string[],
+  relays: string[] = [],
+  onProfile: (pubkey: string, profile: NostrEvent) => void
+): Promise<Map<string, NostrEvent>> {
+  const profiles = new Map<string, NostrEvent>();
+  const uniquePubkeys = [...new Set(pubkeys)];
+
+  if (uniquePubkeys.length === 0) return profiles;
+
+  for (let i = 0; i < uniquePubkeys.length; i += 100) {
+    const chunk = uniquePubkeys.slice(i, i + 100);
+    const filter: CompiledFilter = {
+      kinds: [0],
+      authors: chunk,
+    };
+
+    const events = await fetchEvents(relays, [filter], 10000, (event) => {
+      const existing = profiles.get(event.pubkey);
+      if (!existing || event.created_at > existing.created_at) {
+        profiles.set(event.pubkey, event);
+        onProfile(event.pubkey, event);
+      }
+    });
   }
 
   return profiles;

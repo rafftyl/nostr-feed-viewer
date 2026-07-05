@@ -81,7 +81,7 @@ export default function Home() {
                 setError("");
               }}
               placeholder="Paste naddr1... or a full URL containing one"
-              className="w-full px-5 py-4 text-base rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder:text-slate-400 dark:placeholder:text-slate-500 pr-28"
+              className="w-full px-5 py-4 text-base text-slate-900 dark:text-slate-100 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent placeholder:text-slate-400 dark:placeholder:text-slate-500 pr-28"
             />
             <button
               type="submit"

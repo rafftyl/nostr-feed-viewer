@@ -231,6 +231,10 @@ export function extractNaddrFromPath(path: string): string | null {
   return null;
 }
 
+export function npubShort(pubkey: string): string {
+  return pubkey.slice(0, 8) + "..." + pubkey.slice(-6);
+}
+
 export function npubFromHex(hex: string): string {
   // Simple npub encoding for display
   if (hex.length !== 64) return hex;

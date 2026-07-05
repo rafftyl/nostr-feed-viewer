@@ -7,7 +7,7 @@ Browse custom [Nostr](https://nostr.com) feeds with beautiful thread rendering, 
 This app lets you view **Coracle-style custom feeds** (kind `31890`) via simple URLs:
 
 ```
-https://nostrfeed.rafaltyl.com/naddr1qvzqqq...
+https://yourdomain.com/naddr1qvzqqq...
 ```
 
 ### Features
@@ -41,7 +41,7 @@ Open [http://localhost:3000](http://localhost:3000).
 - A domain name with an A record pointing to your VPS IP
 - SSH access to the VPS
 
-### Option 1: Automated Script (Recommended)
+### Automated Script (Recommended)
 
 1. **Clone the repo on your VPS:**
 
@@ -57,80 +57,31 @@ Open [http://localhost:3000](http://localhost:3000).
    sudo ./deploy.sh
    ```
 
-   The script will:
+   The script will ask you for:
+   - **Domain name** (e.g. `nostrfeeds.rafaltyl.com`)
+   - **Email** for Let's Encrypt certificate
+
+   It will then:
    - Install Docker, Nginx, and Certbot (if missing)
-   - Configure Nginx as a reverse proxy
+   - Generate Nginx config for your domain
    - Build and start the Docker container
-   - Set up SSL with Let's Encrypt (if DNS is ready)
+   - Set up HTTPS with Let's Encrypt (if DNS is ready)
 
-3. **Visit** `https://nostrfeed.rafaltyl.com`
+3. **Visit** `https://yourdomain.com`
 
-### Option 2: Manual Docker Setup
+Config is saved to `.deploy-config` so future runs skip the prompts.
 
-1. **Build and run:**
+### Manual Docker Setup
 
-   ```bash
-   docker compose up -d --build
-   ```
+```bash
+docker compose up -d --build
+```
 
-2. **Set up Nginx** — Copy the config:
-
-   ```bash
-   cp nginx/nostrfeed.rafaltyl.com.conf /etc/nginx/sites-available/
-   ln -sf /etc/nginx/sites-available/nostrfeed.rafaltyl.com.conf /etc/nginx/sites-enabled/
-   nginx -t && systemctl reload nginx
-   ```
-
-3. **Set up SSL:**
-
-   ```bash
-   certbot --nginx -d nostrfeed.rafaltyl.com
-   ```
-
-### Option 3: Direct Node.js
-
-1. **Build:**
-
-   ```bash
-   npm ci
-   npm run build
-   ```
-
-2. **Run:**
-
-   ```bash
-   PORT=3000 node .next/standalone/server.js
-   ```
-
-3. **Use systemd** for process management (see `deploy/systemd.service`).
+Then configure Nginx and SSL manually.
 
 ---
 
-## Architecture
-
-```
-src/
-├── app/
-│   ├── [naddr]/page.tsx     # Dynamic route for naddr URLs
-│   ├── layout.tsx            # Root layout
-│   ├── page.tsx              # Home page with paste input
-│   └── globals.css           # Global styles + animations
-├── components/
-│   ├── FeedView.tsx          # Main orchestrator: loads feed, fetches events + profiles
-│   ├── FeedHeader.tsx        # Feed title, description, metadata
-│   ├── NoteCard.tsx          # Individual note rendering with media detection
-│   ├── TidalWidget.tsx       # Tidal embed player widget
-│   ├── LoadingSpinner.tsx    # Animated loading state
-│   └── ErrorDisplay.tsx      # Error state with retry
-├── lib/
-│   ├── nostr.ts              # WebSocket relay pool, event fetching, profile fetching
-│   ├── feed-parser.ts        # Coracle DSL parser → Nostr filters
-│   └── naddr.ts              # Bech32 naddr encoding/decoding
-└── types/
-    └── index.ts              # TypeScript interfaces
-```
-
-### How a Feed Loads
+## How a Feed Loads
 
 1. User visits `/<naddr1...>`
 2. The naddr is decoded → `{ kind: 31890, pubkey, identifier, relays }`
@@ -164,29 +115,13 @@ Supported types: `kind`, `author`, `tag`, `id`, `address`, `scope`, `relay`, `se
 
 ---
 
-## Deployment Notes for 185.18.221.216
-
-Make sure to:
-
-1. **Point DNS**: Add an A record for `nostrfeed.rafaltyl.com` → `185.18.221.216`
-2. **Open firewall**: Allow ports 80 and 443
-3. **Run the deploy script**: `sudo ./deploy.sh`
-
-### Managing the App
+## Managing the App
 
 ```bash
-# View logs
-docker compose logs -f
-
-# Restart
-docker compose restart
-
-# Rebuild after code changes
-git pull
-docker compose up -d --build
-
-# Stop
-docker compose down
+docker compose logs -f       # View app logs
+docker compose restart       # Restart app
+docker compose down          # Stop app
+docker compose up -d --build # Rebuild & start
 ```
 
 ---

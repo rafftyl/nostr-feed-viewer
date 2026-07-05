@@ -26,7 +26,7 @@ export default function TidalWidget({ info }: TidalWidgetProps) {
         <span className="text-white/50 text-xs">{typeLabel}</span>
       </div>
 
-      {/* Embed */}
+      {/* Embed — no sandbox so NIP-07 signer extensions can inject window.nostr for Tidal Nostr login */}
       <iframe
         src={`https://embed.tidal.com/${info.type}s/${info.id}`}
         width="100%"
@@ -35,7 +35,6 @@ export default function TidalWidget({ info }: TidalWidgetProps) {
         allow="encrypted-media"
         loading="lazy"
         title={`TIDAL ${typeLabel}`}
-        sandbox="allow-same-origin allow-scripts allow-popups allow-popups-to-escape-sandbox"
       />
 
       {/* Footer link */}

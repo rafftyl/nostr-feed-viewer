@@ -197,12 +197,8 @@ export default function FeedView({ naddr }: FeedViewProps) {
           </div>
         ) : (
           <div className="space-y-4" style={{ overflowAnchor: "none" }}>
-            {events.map((event, i) => (
-              <div
-                key={event.id}
-                className="animate-fade-in"
-                style={{ animationDelay: `${Math.min(i * 30, 300)}ms`, animationFillMode: "backwards" }}
-              >
+            {events.map((event) => (
+              <div key={event.id}>
                 <NoteCard event={event} profile={profiles.get(event.pubkey)} />
               </div>
             ))}

@@ -196,7 +196,7 @@ export default function FeedView({ naddr }: FeedViewProps) {
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-4" style={{ overflowAnchor: "none" }}>
             {events.map((event, i) => (
               <div
                 key={event.id}

@@ -104,7 +104,7 @@ export default function Home() {
           </p>
           <div className="flex flex-wrap justify-center gap-2">
             <ExampleButton
-              label="Coracle News Feed"
+              label="Example Feed"
               naddr="naddr1qvzqqqrujgpzqueyupdfgmrx57qcl5xq4j5qkc8mr62lmcer2lh35gy8xq7aqxz7qy88wumn8ghj7mn0wvhxcmmv9uq3wamnwvaz7tmjv4kxz7fwwpexjmtpdshxuet59uqpqdfcxsunwde4x5mrjde5xqcr2dq0g4lqv"
               onSelect={(n) => router.push(`/${n}`)}
             />
@@ -206,7 +206,7 @@ function ExampleButton({
   return (
     <button
       onClick={() => onSelect(naddr)}
-      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-purple-300 dark:hover:border-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
     >
       <svg
         className="w-3.5 h-3.5 text-purple-500"

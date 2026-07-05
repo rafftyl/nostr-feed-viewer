@@ -1,16 +1,56 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { NostrEvent, Profile, TidalInfo } from "@/types";
 import { formatDistanceToNow } from "date-fns";
+import { npubShort } from "@/lib/naddr";
 import TidalWidget from "./TidalWidget";
+import QuotedNote from "./QuotedNote";
 
 interface NoteCardProps {
   event: NostrEvent;
   profile?: Profile;
+  isRepost?: boolean;
 }
 
-export default function NoteCard({ event, profile }: NoteCardProps) {
+export default function NoteCard({ event, profile, isRepost }: NoteCardProps) {
+  // ── NIP-18: Kind 6 reposts ─────────────────────────────────────────────────
+  // The content of a kind 6 event is the JSON of the reposted event.
+  // We render a repost header + the embedded event as a quoted note.
+  if (event.kind === 6 && !isRepost) {
+    let reposted: NostrEvent | null = null;
+    try {
+      reposted = JSON.parse(event.content);
+    } catch {
+      // content is not valid JSON — fall through to render as regular note
+    }
+
+    if (reposted && reposted.content) {
+      const reposterName =
+        profile?.display_name || profile?.name || npubShort(event.pubkey);
+
+      return (
+        <article className="bg-white dark:bg-slate-800/90 rounded-xl shadow-sm hover:shadow-md transition-shadow border border-slate-200 dark:border-slate-700/60 overflow-hidden">
+          <div className="p-4">
+            {/* Repost indicator */}
+            <div className="flex items-center gap-2 mb-3 text-sm text-slate-500 dark:text-slate-400">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span className="font-medium">{reposterName} reposted</span>
+            </div>
+            {/* Embedded original event */}
+            <div className="border-l-2 border-slate-200 dark:border-slate-700 pl-4">
+              <NoteCard event={reposted} profile={undefined} isRepost />
+            </div>
+          </div>
+        </article>
+      );
+    }
+  }
+
+  // ── Regular note rendering ─────────────────────────────────────────────────
+
   const parsedContent = useMemo(
     () => parseContent(event.content),
     [event.content]
@@ -73,7 +113,7 @@ export default function NoteCard({ event, profile }: NoteCardProps) {
           </div>
         </div>
 
-        {/* Content — explicit text colors, no prose dependency */}
+        {/* Content */}
         <div className="text-[15px] leading-relaxed text-slate-800 dark:text-slate-100">
           {parsedContent.map((item, i) => {
             if (item.type === "text") {
@@ -84,12 +124,10 @@ export default function NoteCard({ event, profile }: NoteCardProps) {
               );
             }
             if (item.type === "link") {
-              // Check for Tidal
               const tidal = detectTidal(item.content);
               if (tidal) {
                 return <TidalWidget key={i} info={tidal} />;
               }
-              // Check for images
               if (isImageUrl(item.content)) {
                 return (
                   <div key={i} className="my-3">
@@ -102,7 +140,6 @@ export default function NoteCard({ event, profile }: NoteCardProps) {
                   </div>
                 );
               }
-              // Check for YouTube
               const youtube = detectYouTube(item.content);
               if (youtube) {
                 return (
@@ -117,7 +154,6 @@ export default function NoteCard({ event, profile }: NoteCardProps) {
                   </div>
                 );
               }
-              // Check for Spotify
               const spotify = detectSpotify(item.content);
               if (spotify) {
                 return (
@@ -134,7 +170,6 @@ export default function NoteCard({ event, profile }: NoteCardProps) {
                   </div>
                 );
               }
-              // Regular link
               return (
                 <a
                   key={i}
@@ -158,6 +193,12 @@ export default function NoteCard({ event, profile }: NoteCardProps) {
               );
             }
             if (item.type === "nostr-ref") {
+              // NIP-27: note1 / nevent1 refs render as inline quoted notes
+              const clean = item.content.replace(/^nostr:/i, "");
+              if (clean.startsWith("note1") || clean.startsWith("nevent1")) {
+                return <QuotedNote key={i} noteRef={item.content} />;
+              }
+              // Other nostr refs (npub1, nprofile1, naddr1) — render as chips
               return (
                 <span
                   key={i}
@@ -171,7 +212,7 @@ export default function NoteCard({ event, profile }: NoteCardProps) {
           })}
         </div>
 
-        {/* Event tags */}
+        {/* Tags */}
         {event.tags.some((t) => t[0] === "t") && (
           <div className="mt-3 flex flex-wrap gap-1.5">
             {event.tags
@@ -188,36 +229,18 @@ export default function NoteCard({ event, profile }: NoteCardProps) {
           </div>
         )}
 
-        {/* Actions */}
-        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center gap-6 text-slate-400 dark:text-slate-500">
-          <button className="flex items-center gap-1.5 text-sm hover:text-blue-500 dark:hover:text-blue-400 transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-            Reply
-          </button>
-          <button className="flex items-center gap-1.5 text-sm hover:text-green-500 dark:hover:text-green-400 transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            Repost
-          </button>
-          <button className="flex items-center gap-1.5 text-sm hover:text-red-500 dark:hover:text-red-400 transition-colors">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-            </svg>
-            Like
-          </button>
+        {/* View link */}
+        <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/60 flex items-center justify-end">
           <a
             href={`https://njump.me/${event.id}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 text-sm hover:text-purple-500 dark:hover:text-purple-400 transition-colors ml-auto"
+            className="flex items-center gap-1.5 text-sm text-slate-400 dark:text-slate-500 hover:text-purple-500 dark:hover:text-purple-400 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
             </svg>
-            View
+            View on njump
           </a>
         </div>
       </div>
@@ -235,35 +258,26 @@ interface ContentPart {
 function parseContent(content: string): ContentPart[] {
   const parts: ContentPart[] = [];
 
-  // Master regex that captures URLs, hashtags, and nostr refs in one pass
-  // This avoids the lastIndex pitfalls of multiple .test() calls on global regexes
-  const masterRegex = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)|(nostr:[a-z0-9]+)|(#[a-zA-Z0-9_]+)/gi;
+  // Single master regex — avoids lastIndex bugs from multiple .test() calls
+  const masterRegex =
+    /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)|(nostr:[a-z0-9]+)|(#[a-zA-Z0-9_]+)/gi;
 
   let lastIndex = 0;
   let match: RegExpExecArray | null;
 
   while ((match = masterRegex.exec(content)) !== null) {
-    // Push any text before this match
     if (match.index > lastIndex) {
       const text = content.slice(lastIndex, match.index);
       if (text) parts.push({ type: "text", content: text });
     }
 
-    if (match[1]) {
-      // URL
-      parts.push({ type: "link", content: match[1] });
-    } else if (match[2]) {
-      // nostr ref
-      parts.push({ type: "nostr-ref", content: match[2] });
-    } else if (match[3]) {
-      // hashtag
-      parts.push({ type: "hashtag", content: match[3] });
-    }
+    if (match[1]) parts.push({ type: "link", content: match[1] });
+    else if (match[2]) parts.push({ type: "nostr-ref", content: match[2] });
+    else if (match[3]) parts.push({ type: "hashtag", content: match[3] });
 
     lastIndex = match.index + match[0].length;
   }
 
-  // Remaining text after last match
   if (lastIndex < content.length) {
     const text = content.slice(lastIndex);
     if (text) parts.push({ type: "text", content: text });
@@ -274,14 +288,6 @@ function parseContent(content: string): ContentPart[] {
 
 // ─── Media Detection ─────────────────────────────────────────────────────────
 
-/**
- * Detect Tidal links. Supports multiple URL formats:
- *   - https://tidal.com/browse/track/12345
- *   - https://tidal.com/track/12345
- *   - https://listen.tidal.com/track/12345
- *   - https://www.tidal.com/browse/album/12345?u=t
- *   - tidal://track/12345 (deep links)
- */
 function detectTidal(url: string): TidalInfo | null {
   const regex =
     /(?:https?:\/\/)?(?:(?:www|listen)\.)?tidal\.com\/(?:browse\/)?(track|album|playlist)\/(\d+)/i;
@@ -317,12 +323,6 @@ function detectSpotify(
 
 function isImageUrl(url: string): boolean {
   return /\.(jpg|jpeg|png|gif|webp|avif|svg)(\?.*)?$/i.test(url);
-}
-
-// ─── Utilities ───────────────────────────────────────────────────────────────
-
-function npubShort(pubkey: string): string {
-  return pubkey.slice(0, 8) + "..." + pubkey.slice(-6);
 }
 
 function truncateUrl(url: string, maxLen = 60): string {

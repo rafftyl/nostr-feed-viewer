@@ -1,6 +1,6 @@
 import { DecodedNaddr } from "@/types";
 
-// ─── Bech32 encoding/decoding ────────────────────────────────────────────────
+// --- Bech32 encoding/decoding ---
 
 const BECH32_CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
 
@@ -97,7 +97,7 @@ const TLV_SPECIAL = 0; // relay
 const TLV_AUTHOR = 2; // pubkey
 const TLV_KIND = 3; // kind number
 
-// ─── Decode naddr ────────────────────────────────────────────────────────────
+// --- Decode naddr ---
 
 export function decodeNaddr(naddr: string): DecodedNaddr | null {
   try {
@@ -110,7 +110,6 @@ export function decodeNaddr(naddr: string): DecodedNaddr | null {
 
     const data = new Uint8Array(eightBitData);
 
-    // Parse TLV
     let identifier = "";
     let pubkey = "";
     let kind = 0;
@@ -126,7 +125,6 @@ export function decodeNaddr(naddr: string): DecodedNaddr | null {
       const value = data.slice(i + 2, i + 2 + length);
 
       if (type === TLV_SPECIAL) {
-        // identifier (d-tag) - this is the "special" field in naddr
         identifier = new TextDecoder().decode(value);
       } else if (type === TLV_AUTHOR) {
         pubkey = bytesToHex(value);
@@ -134,7 +132,6 @@ export function decodeNaddr(naddr: string): DecodedNaddr | null {
         kind =
           (value[0] << 24) | (value[1] << 16) | (value[2] << 8) | value[3];
       } else if (type === 1) {
-        // relay hint
         relays.push(new TextDecoder().decode(value));
       }
 
@@ -144,7 +141,7 @@ export function decodeNaddr(naddr: string): DecodedNaddr | null {
     if (!pubkey || !identifier) return null;
 
     return {
-      kind: kind || 31890, // default to feed kind if not specified
+      kind: kind || 31890,
       pubkey,
       identifier,
       relays,
@@ -154,7 +151,94 @@ export function decodeNaddr(naddr: string): DecodedNaddr | null {
   }
 }
 
-// ─── Encode naddr ────────────────────────────────────────────────────────────
+// --- Decode note1 / nevent1 (NIP-18 & NIP-27 quote references) ---
+
+export interface NeventInfo {
+  eventId: string;
+  relays: string[];
+  author?: string;
+  kind?: number;
+}
+
+/**
+ * Decode a note1... bech32 string to a 64-char hex event ID.
+ */
+export function decodeNote1(note1: string): string | null {
+  try {
+    const clean = note1.replace(/^nostr:/i, "");
+    if (!clean.startsWith("note1")) return null;
+    const decoded = bech32Decode(clean);
+    if (!decoded) return null;
+    const bytes = convertBits(decoded.data, 5, 8, false);
+    if (!bytes || bytes.length !== 32) return null;
+    return bytesToHex(new Uint8Array(bytes));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Decode an nevent1... bech32 string to event ID + optional relay hints.
+ */
+export function decodeNevent1(nevent1: string): NeventInfo | null {
+  try {
+    const clean = nevent1.replace(/^nostr:/i, "");
+    if (!clean.startsWith("nevent1")) return null;
+    const decoded = bech32Decode(clean);
+    if (!decoded) return null;
+    const bytes = convertBits(decoded.data, 5, 8, false);
+    if (!bytes) return null;
+    const data = new Uint8Array(bytes);
+
+    let eventId = "";
+    const relays: string[] = [];
+    let author: string | undefined;
+    let kind: number | undefined;
+
+    let i = 0;
+    while (i < data.length) {
+      const t = data[i];
+      const len = data[i + 1];
+      if (i + 2 + len > data.length) break;
+      const val = data.slice(i + 2, i + 2 + len);
+
+      if (t === 0 && len === 32) eventId = bytesToHex(val);
+      else if (t === 1) relays.push(new TextDecoder().decode(val));
+      else if (t === 2 && len === 32) author = bytesToHex(val);
+      else if (t === 3 && len >= 4)
+        kind = (val[0] << 24) | (val[1] << 16) | (val[2] << 8) | val[3];
+
+      i += 2 + len;
+    }
+
+    if (!eventId || eventId.length !== 64) return null;
+    return { eventId, relays, author, kind };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Extract an event ID from any nostr: reference that points to a note.
+ * Works with note1... and nevent1... prefixes.
+ * Returns { eventId, relays } or null if not a note reference.
+ */
+export function decodeNostrNoteRef(
+  ref: string
+): { eventId: string; relays: string[] } | null {
+  const clean = ref.replace(/^nostr:/i, "");
+  if (clean.startsWith("note1")) {
+    const eventId = decodeNote1(clean);
+    return eventId ? { eventId, relays: [] } : null;
+  }
+  if (clean.startsWith("nevent1")) {
+    const info = decodeNevent1(clean);
+    return info ? { eventId: info.eventId, relays: info.relays } : null;
+  }
+  return null;
+}
+
+// --- Encode naddr ---
 
 function bech32CreateChecksum(hrp: string, data: number[]): number[] {
   const values = [...bech32HrpExpand(hrp), ...data, 0, 0, 0, 0, 0, 0];
@@ -181,27 +265,22 @@ export function encodeNaddr(
   identifier: string,
   relays: string[] = []
 ): string {
-  // Build TLV
   const tlv: number[] = [];
 
-  // Special field (type 0) = identifier
   const idBytes = new TextEncoder().encode(identifier);
   tlv.push(0, idBytes.length);
   tlv.push(...idBytes);
 
-  // Relay hints (type 1)
   for (const relay of relays) {
     const relayBytes = new TextEncoder().encode(relay);
     tlv.push(1, relayBytes.length);
     tlv.push(...relayBytes);
   }
 
-  // Author (type 2)
   const authorBytes = hexToBytes(pubkey);
   tlv.push(2, 32);
   tlv.push(...authorBytes);
 
-  // Kind (type 3) - big endian u32
   tlv.push(
     3,
     4,
@@ -211,21 +290,19 @@ export function encodeNaddr(
     kind & 0xff
   );
 
-  // Convert to 5-bit
   const fiveBit = convertBits(tlv, 8, 5, true);
   if (!fiveBit) throw new Error("Failed to convert bits");
 
   return bech32Encode("naddr", fiveBit);
 }
 
-// ─── Utilities ───────────────────────────────────────────────────────────────
+// --- Utilities ---
 
 export function isNaddr(input: string): boolean {
   return /^naddr1[0-9a-z]+$/.test(input.toLowerCase());
 }
 
 export function extractNaddrFromPath(path: string): string | null {
-  // Remove leading slash and any trailing slashes
   const clean = path.replace(/^\/+/, "").replace(/\/+$/, "");
   if (isNaddr(clean)) return clean;
   return null;
@@ -236,7 +313,6 @@ export function npubShort(pubkey: string): string {
 }
 
 export function npubFromHex(hex: string): string {
-  // Simple npub encoding for display
   if (hex.length !== 64) return hex;
   return hex.slice(0, 8) + "..." + hex.slice(-8);
 }

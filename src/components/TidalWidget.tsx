@@ -14,10 +14,10 @@ export default function TidalWidget({ info }: TidalWidgetProps) {
         ? "Album"
         : "Playlist";
 
-  const embedHeight = info.type === "track" ? 80 : 300;
+  const embedHeight = info.type === "track" ? 152 : 400;
 
   return (
-    <div className="my-4 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-900 to-slate-800 shadow-lg">
+    <div className="my-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-gradient-to-br from-slate-900 to-slate-800 shadow-lg">
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-2.5 bg-black/30">
         <TidalLogo />
